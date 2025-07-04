@@ -15,7 +15,7 @@ app = FastAPI()
 # CORS setup (match your frontend URL here)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://user-details-form-virid.vercel.app"],
+    allow_origins=["https://user-input-healthproof.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
