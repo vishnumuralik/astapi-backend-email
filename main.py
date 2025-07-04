@@ -5,9 +5,14 @@ import aiosmtplib
 import os
 from openpyxl import Workbook, load_workbook
 import mimetypes
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(dotenv_path=".env")
 
 app = FastAPI()
 
+# CORS setup (match your frontend URL here)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://user-details-form-virid.vercel.app"],
@@ -16,9 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GMAIL_USER = "vishnumuralikky@gmail.com"
-GMAIL_APP_PASSWORD = "svnylwpprxvyphgf"
-EXCEL_FILE = "data.xlsx"
+# Secure config from .env
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+EXCEL_FILE = os.getenv("EXCEL_FILE", "data.xlsx")  # default if not defined
 
 @app.post("/send-email")
 async def send_email(
@@ -45,14 +51,15 @@ async def send_email(
     ws.append(row)
     wb.save(EXCEL_FILE)
 
-    # Step 2: Prepare message
+    # Step 2: Email content
     message = EmailMessage()
     message["From"] = GMAIL_USER
     message["To"] = GMAIL_USER
     message["Subject"] = f"🎉 Welcome to Team – {name}"
 
-    # Plain text fallback
-    plain_text = f"""
+    # Plain text
+    message.set_content(
+        f"""
 {name} has submitted their professional details.
 
 They have {totalExperience} years of experience.
@@ -61,40 +68,36 @@ Their domain/skill is {domainSkill}.
 Their hobbies include {hobbies}.
 Preferred office location is {officeLocation}.
 """
-    message.set_content(plain_text)
+    )
 
-    # Image setup
+    # HTML + Image handling
     photo_bytes = None
     photo_type = None
     cid = "profilephoto@act"
     cid_img_tag = ""
 
     if photo and photo.filename:
-        try:
-            content_type = photo.content_type or "image/jpeg"
-            if content_type not in ["image/jpeg", "image/png", "image/jpg"]:
-                raise HTTPException(status_code=400, detail="Unsupported image format.")
+        content_type = photo.content_type or "image/jpeg"
+        if content_type not in ["image/jpeg", "image/png", "image/jpg"]:
+            raise HTTPException(status_code=400, detail="Unsupported image format.")
 
-            photo_bytes = await photo.read()
-            if not photo_bytes:
-                raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        photo_bytes = await photo.read()
+        if not photo_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
-            photo_type = mimetypes.guess_extension(content_type).replace(".", "") or "jpeg"
+        photo_type = mimetypes.guess_extension(content_type).replace(".", "") or "jpeg"
 
-            # CID image HTML
-            cid_img_tag = f"""
-            <div style="text-align: center; margin-top: 20px;">
-              <img src="cid:{cid}" alt="Profile Photo"
-                   style="border-radius: 50%; width: 150px; height: 150px;
-                          object-fit: cover; border: 2px solid #ccc;
-                          box-shadow: 0 0 10px rgba(0,0,0,0.1);" />
-            </div>
-            """
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Photo error: {e}")
+        cid_img_tag = f"""
+        <div style="text-align: center; margin-top: 20px;">
+          <img src="cid:{cid}" alt="Profile Photo"
+               style="border-radius: 50%; width: 150px; height: 150px;
+                      object-fit: cover; border: 2px solid #ccc;
+                      box-shadow: 0 0 10px rgba(0,0,0,0.1);" />
+        </div>
+        """
 
-    # Step 3: HTML version
-    html_body = f"""
+    # Add HTML alternative
+    message.add_alternative(f"""
     <html>
       <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
         <div style="background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto;">
@@ -112,12 +115,9 @@ Preferred office location is {officeLocation}.
         </div>
       </body>
     </html>
-    """
+    """, subtype="html")
 
-    # Step 4: Add HTML before attachments
-    message.add_alternative(html_body, subtype="html")
-
-    # Step 5: Attach Excel
+    # Attach Excel
     with open(EXCEL_FILE, "rb") as f:
         message.add_attachment(
             f.read(),
@@ -126,7 +126,7 @@ Preferred office location is {officeLocation}.
             filename="data.xlsx"
         )
 
-    # Step 6: Attach image (CID)
+    # Attach photo (CID image)
     if photo_bytes and photo_type:
         message.add_attachment(
             photo_bytes,
@@ -136,7 +136,7 @@ Preferred office location is {officeLocation}.
             cid=cid
         )
 
-    # Step 7: Send
+    # Send email
     try:
         await aiosmtplib.send(
             message,
@@ -146,7 +146,6 @@ Preferred office location is {officeLocation}.
             username=GMAIL_USER,
             password=GMAIL_APP_PASSWORD,
         )
-        return {"message": "✅ Email sent successfully with narrative details! Thanks for partcipating"}
-            
+        return {"message": "✅ Email sent successfully with narrative details! Thanks for participating"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email failed: {e}")
