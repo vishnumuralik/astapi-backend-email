@@ -15,12 +15,11 @@ app = FastAPI()
 # CORS setup (match your frontend URL here)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://user-input-healthproof.vercel.app"],
+    allow_origins=["https://user-input-healthproof.vercel.app"],  # ✅ no trailing slash
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Secure config from .env
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
